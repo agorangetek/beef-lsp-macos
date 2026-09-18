@@ -15,7 +15,9 @@ extension** (TypeScript).
 
 2. **Node 18+** (tested on 24) and **python3** — the latter only to run the verification clients.
 
-Throughout, `<Beef>` means the Beef checkout that `beef-macos` produced (its `Beef/` directory).
+Throughout, `<Beef>` means the Beef checkout that `beef-macos` produced (its `Beef/` directory), and
+`<Beef>/IDE/dist` is where its CLI tools live. **A macOS build contains no IDE** — the `IDE/` prefix is
+just the repository's layout, and `BeefBuild`/`BeefLsp` are written there.
 
 ## 1. Build the language server
 
@@ -67,7 +69,7 @@ export BEEF_DIST=<Beef>/IDE/dist          # or edit the default inside the launc
 ```
 
 The launcher matters: the server links `@rpath/libhunspell.dylib` and resolves corlib relative to its own
-directory, so it must run with a Beef `IDE/dist` as its working directory. The launcher `cd`s there.
+directory, so it must run with the toolchain's dist directory (`<Beef>/IDE/dist`) as its working directory. The launcher `cd`s there.
 
 Then install the extension — VS Code / VSCodium → Extensions → `...` → **Install from VSIX…** →
 `prebuilt/beeflang-0.1.1.vsix`.

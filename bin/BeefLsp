@@ -8,7 +8,8 @@
 # links @rpath/libhunspell.dylib from that directory and resolves corlib from
 # ../../BeefLibs. So this wrapper cd's into that directory before exec'ing.
 #
-# BEEF_DIST must point at the IDE/dist directory of a Beef checkout built with
+# BEEF_DIST must point at the toolchain's dist directory - called IDE/dist in the repo
+# layout, though no IDE is built on macOS - of a checkout built with
 # https://github.com/agorangetek/beef-macos   (default below).
 #
 # Install so that the editor can find it:
