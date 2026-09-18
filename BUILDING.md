@@ -16,8 +16,14 @@ extension** (TypeScript).
 2. **Node 18+** (tested on 24) and **python3** — the latter only to run the verification clients.
 
 Throughout, `<Beef>` means the Beef checkout that `beef-macos` produced (its `Beef/` directory), and
-`<Beef>/IDE/dist` is where its CLI tools live. **A macOS build contains no IDE** — the `IDE/` prefix is
-just the repository's layout, and `BeefBuild`/`BeefLsp` are written there.
+`<Beef>/IDE/dist` is where its CLI tools live:
+
+```bash
+BEEF_DIST=<Beef>/IDE/dist     # the toolchain's bin/lib directory
+```
+
+**A macOS build contains no IDE** — `IDE/` is only the repository's layout, and `BeefBuild`/`BeefLsp` are
+written there. If `IDE/dist` reads oddly, read it as "the toolchain's binary and library directory".
 
 ## 1. Build the language server
 
