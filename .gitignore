@@ -1,0 +1,12 @@
+# installed dependencies and build output
+vscode-extension/node_modules/
+vscode-extension/out/
+vscode-extension/package-lock.json
+
+# scratch builds
+build/
+*.vsix
+!prebuilt/*.vsix
+
+# macOS
+.DS_Store

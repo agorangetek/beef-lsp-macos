@@ -1,0 +1,16 @@
+FileVersion = 1
+Projects = {BeefLsp = {Path = "."}, corlib = {Path = "../BeefLibs/corlib"}, Debugger64 = {Path = "../Debugger64"}, BeefySysLib = {Path = "../BeefySysLib"}, IDEHelper = {Path = "../IDEHelper"}, Beefy2D = {Path = "../BeefLibs/Beefy2D"}}
+
+Unlocked = ["corlib"]
+
+[Workspace]
+StartupProject = "BeefLsp"
+
+[Configs.Debug.Win64]
+AllocStackTraceDepth = 8
+
+[Configs.Debug.macOS]
+AllocStackTraceDepth = 8
+
+[Configs.Release.macOS]
+AllocStackTraceDepth = 0

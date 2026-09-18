@@ -1,0 +1,31 @@
+#!/bin/bash
+# ---------------------------------------------------------------------------
+# Launcher for the Beef language server.
+#
+# The VS Code extension spawns the server by name:
+#     execFile("BeefLsp", [ "--port=NNNN" ])
+# and the server needs a Beef IDE distribution tree around it at runtime: it
+# links @rpath/libhunspell.dylib from that directory and resolves corlib from
+# ../../BeefLibs. So this wrapper cd's into that directory before exec'ing.
+#
+# BEEF_DIST must point at the IDE/dist directory of a Beef checkout built with
+# https://github.com/agorangetek/beef-macos   (default below).
+#
+# Install so that the editor can find it:
+#     mkdir -p ~/bin && cp bin/BeefLsp ~/bin/ && chmod +x ~/bin/BeefLsp
+# and if ~/bin is not on the PATH that GUI apps see (macOS apps do not inherit
+# your shell PATH), point the extension at it directly:
+#     "beeflang.serverPath": "/Users/you/bin/BeefLsp"
+# ---------------------------------------------------------------------------
+BEEF_DIST="${BEEF_DIST:-$HOME/beef-macos/Beef/IDE/dist}"
+
+if [ ! -x "$BEEF_DIST/BeefLsp" ]; then
+	echo "BeefLsp launcher: no server binary at $BEEF_DIST/BeefLsp" >&2
+	echo "Build Beef with github.com/agorangetek/beef-macos, copy this repo's src/," >&2
+	echo "BeefProj.toml and BeefSpace.toml into <Beef>/BeefLsp/, then build it -" >&2
+	echo "see BUILDING.md. Override the location with BEEF_DIST=/path/to/IDE/dist." >&2
+	exit 1
+fi
+
+cd "$BEEF_DIST" || exit 1
+exec ./BeefLsp "$@"

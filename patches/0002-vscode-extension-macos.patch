@@ -1,0 +1,112 @@
+diff --git a/BeefLsp/beef-vscode/package.json b/BeefLsp/beef-vscode/package.json
+index ed92ab1..effbe12 100644
+--- a/BeefLsp/beef-vscode/package.json
++++ b/BeefLsp/beef-vscode/package.json
+@@ -88,6 +88,11 @@
+           "type": "boolean",
+           "default": false,
+           "description": "When the LSP server is running in Release mode it by default doesn't log debug messages, you can change this behaviour with this setting."
++        },
++        "beeflang.serverPath": {
++          "type": "string",
++          "default": "BeefLsp",
++          "description": "Path to the BeefLsp language server executable. Set an absolute path when the server is not on PATH (macOS GUI apps do not inherit the shell PATH)."
+         }
+       }
+     },
+diff --git a/BeefLsp/beef-vscode/src/extension.ts b/BeefLsp/beef-vscode/src/extension.ts
+index 84db19d..b6ddf11 100644
+--- a/BeefLsp/beef-vscode/src/extension.ts
++++ b/BeefLsp/beef-vscode/src/extension.ts
+@@ -37,32 +37,58 @@ export class Extension {
+ 
+     start() {
+         // TODO: Always use TCP transport since currently the STDIO one does not close properly
+-        let serverOptions: ServerOptions = {
+-            command: "BeefLsp"
+-        };
+-
+-        execFile("BeefLsp", [ "--port=5556" ]);
+-        setTimeout(() => {
+-            //if (this.context.extensionMode === vscode.ExtensionMode.Development && devTcp) {
+-            if (true) {
+-                serverOptions = () => {
+-                    let socket = net.createConnection({
+-                        port: 5556
++        // The server path is configurable because macOS GUI apps do not inherit the shell PATH,
++        // so a launcher in ~/bin would otherwise never be found.
++        const serverPath = vscode.workspace.getConfiguration("beeflang").get<string>("serverPath") || "BeefLsp";
++
++        // Ask the OS for a free port instead of hardcoding 5556: two windows would otherwise
++        // fight over the port, and a stale server from a previous window would block new ones.
++        new Promise<number>((resolve, reject) => {
++            const probe = net.createServer();
++            probe.once("error", reject);
++            probe.listen(0, "127.0.0.1", () => {
++                const addr = probe.address();
++                const port = addr && typeof addr === "object" ? addr.port : 0;
++                probe.close(() => resolve(port));
++            });
++        }).then((port) => {
++            const child = execFile(serverPath, [ `--port=${port}` ]);
++            child.on("error", (err) => {
++                vscode.window.showErrorMessage(
++                    `Beef Lang: failed to start '${serverPath}' (${err.message}). ` +
++                    `Set "beeflang.serverPath" to the full path of the BeefLsp executable.`);
++            });
++
++            let serverOptions: ServerOptions = { command: serverPath };
++
++            // Retry the connect instead of a single 1s delay: the server needs time to start,
++            // and failing here used to send the client into a crash/restart loop.
++            serverOptions = () => new Promise<StreamInfo>((resolve, reject) => {
++                const attempt = (n: number) => {
++                    const socket = net.createConnection({
++                        // Explicit IPv4 loopback: the server binds 127.0.0.1, avoiding clients
++                        // that would try ::1 first.
++                        host: "127.0.0.1",
++                        port
++                    });
++
++                    socket.once("connect", () => {
++                        const result: StreamInfo = { writer: socket, reader: socket };
++                        resolve(result);
++                    });
++                    socket.once("error", (err) => {
++                        socket.destroy();
++                        if (n >= 100) reject(err); // ~10s of retries
++                        else setTimeout(() => attempt(n + 1), 100);
+                     });
+-            
+-                    let result: StreamInfo = {
+-                        writer: socket,
+-                        reader: socket
+-                    };
+-            
+-                    return Promise.resolve(result);
+                 };
+-            }
+-        
+-            let clientOptions: LanguageClientOptions = {
++                attempt(0);
++            });
++
++            const clientOptions: LanguageClientOptions = {
+                 documentSelector: [{ scheme: "file", language: "bf" }]
+             };
+-        
++
+             this.client = new LanguageClient(
+                 "beeflang",
+                 "Beef Lang",
+@@ -74,7 +100,9 @@ export class Extension {
+             this.barItem.show();
+ 
+             this.client.start().then(this.onReady.bind(this));
+-        }, 1000);
++        }).catch((err) => {
++            vscode.window.showErrorMessage(`Beef Lang: could not find a free port: ${err}`);
++        });
+     }
+ 
+     private onReady() {

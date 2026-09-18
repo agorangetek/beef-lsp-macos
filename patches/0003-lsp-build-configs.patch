@@ -1,0 +1,46 @@
+diff --git a/BeefLsp/BeefProj.toml b/BeefLsp/BeefProj.toml
+index 6d8e50d..cfee120 100644
+--- a/BeefLsp/BeefProj.toml
++++ b/BeefLsp/BeefProj.toml
+@@ -41,3 +41,19 @@ Type = "Folder"
+ Path = "../IDE/src"
+ Name = "ide"
+ AutoInclude = true
++
++[Configs.Debug.macOS]
++TargetDirectory = "$(WorkspaceDir)/../IDE/dist"
++TargetName = "$(ProjectName)_d"
++OtherLinkFlags = "./libBeefRT_d.a ./libIDEHelper_d.a ./libBeefySysLib_d.a ./libhunspell.dylib $(Var IDEHelperLibs) -L/opt/homebrew/opt/llvm@22/lib -Wl,-rpath -Wl,@executable_path"
++CLibType = "Dynamic"
++PreBuildCmds = ["ReadFile(\"$(WorkspaceDir)/../IDE/dist/IDEHelper_libs_d.txt\", \"IDEHelperLibs\")"]
++PreprocessorMacros = ["DEBUG", "CLI"]
++
++[Configs.Release.macOS]
++TargetDirectory = "$(WorkspaceDir)/../IDE/dist"
++TargetName = "$(ProjectName)"
++OtherLinkFlags = "./libBeefRT.a ./libIDEHelper.a ./libBeefySysLib.a ./libhunspell.dylib $(Var IDEHelperLibs) -L/opt/homebrew/opt/llvm@22/lib -Wl,-rpath -Wl,@executable_path"
++CLibType = "Dynamic"
++PreBuildCmds = ["ReadFile(\"$(WorkspaceDir)/../IDE/dist/IDEHelper_libs.txt\", \"IDEHelperLibs\")"]
++PreprocessorMacros = ["CLI"]
+diff --git a/BeefLsp/BeefSpace.toml b/BeefLsp/BeefSpace.toml
+index 7f532a1..eca6a44 100644
+--- a/BeefLsp/BeefSpace.toml
++++ b/BeefLsp/BeefSpace.toml
+@@ -1,8 +1,16 @@
+ FileVersion = 1
+-Projects = {BeefLsp = {Path = "."}, Debugger64 = {Path = "../Debugger64"}, BeefySysLib = {Path = "../BeefySysLib"}, IDEHelper = {Path = "../IDEHelper"}, Beefy2D = {Path = "../BeefLibs/Beefy2D"}, libgit2 = {Path = "../BeefLibs/libgit2"}}
++Projects = {BeefLsp = {Path = "."}, corlib = {Path = "../BeefLibs/corlib"}, Debugger64 = {Path = "../Debugger64"}, BeefySysLib = {Path = "../BeefySysLib"}, IDEHelper = {Path = "../IDEHelper"}, Beefy2D = {Path = "../BeefLibs/Beefy2D"}, libgit2 = {Path = "../BeefLibs/libgit2"}}
++
++Unlocked = ["corlib"]
+ 
+ [Workspace]
+ StartupProject = "BeefLsp"
+ 
+ [Configs.Debug.Win64]
+ AllocStackTraceDepth = 8
++
++[Configs.Debug.macOS]
++AllocStackTraceDepth = 8
++
++[Configs.Release.macOS]
++AllocStackTraceDepth = 0

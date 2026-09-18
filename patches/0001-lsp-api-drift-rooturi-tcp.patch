@@ -1,0 +1,160 @@
+diff --git a/BeefLsp/src/BeefLspServer.bf b/BeefLsp/src/BeefLspServer.bf
+index 550c7c2..dfd9304 100644
+--- a/BeefLsp/src/BeefLspServer.bf
++++ b/BeefLsp/src/BeefLspServer.bf
+@@ -71,11 +71,51 @@ namespace BeefLsp {
+ 			else StartTcp(port);
+ 		}
+ 
++		// Resolves the workspace directory from the initialize params.
++		// Per the LSP spec rootUri takes priority over the deprecated rootPath; we also
++		// fall back to the first workspace folder for clients that only send those.
++		// NOTE: this Json type reads uninitialized memory when you index into a non-object,
++		// so every level is type-checked before being used.
++		private bool ResolveWorkspacePath(Json args, String workspacePath) {
++			Json rootUriJson = args["rootUri"];
++			if (rootUriJson.IsString && !rootUriJson.AsString.IsEmpty) {
++				String resolved = Utils.GetPath(rootUriJson.AsString, workspacePath).GetValueOrLog!("");
++				if (!resolved.IsEmpty) return true;
++			}
++
++			Json rootPathJson = args["rootPath"];
++			if (rootPathJson.IsString && !rootPathJson.AsString.IsEmpty) {
++				workspacePath.Set(rootPathJson.AsString);
++				return true;
++			}
++
++			Json foldersJson = args["workspaceFolders"];
++			if (foldersJson.IsArray) {
++				let folders = foldersJson.AsArray;
++				if ((folders.Count > 0) && (folders[0].IsObject)) {
++					Json folderUriJson = folders[0]["uri"];
++					if (folderUriJson.IsString) {
++						String resolved = Utils.GetPath(folderUriJson.AsString, workspacePath).GetValueOrLog!("");
++						if (!resolved.IsEmpty) return true;
++					}
++				}
++			}
++
++			return false;
++		}
++
+ 		private Result<Json, Error> OnInitialize(Json args) {
+-			StringView workspacePath = args["rootPath"].AsString; // TODO: Also check rootUri which should have higher priority
++			String workspacePath = scope .();
++			if (!ResolveWorkspacePath(args, workspacePath))
++				Log.Error("No workspace path given (rootUri, rootPath and workspaceFolders are all missing)");
++
+ 			app.LoadWorkspace(workspacePath);
+ 
+-			GetClientCapabilities(args["capabilities"]);
++			Json capsJson = args["capabilities"];
++			if (capsJson.IsObject)
++				GetClientCapabilities(capsJson);
++			else
++				Log.Error("No capabilities in initialize params");
+ 
+ 			// Response
+ 			Json res = .Object();
+@@ -117,7 +157,16 @@ namespace BeefLsp {
+ 			//     Semantic Tokens
+ 			for (int i < tokenTypeIds.Count) tokenTypeIds[i] = -1;
+ 
+-			Json clientTokenTypes = args["capabilities"]["textDocument"]["semanticTokens"]["tokenTypes"];
++			Json clientTokenTypes = default;
++			Json capsObj = args["capabilities"];
++			if (capsObj.IsObject) {
++				Json textDocumentJson = capsObj["textDocument"];
++				if (textDocumentJson.IsObject) {
++					Json semanticTokensJson = textDocumentJson["semanticTokens"];
++					if (semanticTokensJson.IsObject)
++						clientTokenTypes = semanticTokensJson["tokenTypes"];
++				}
++			}
+ 			if (clientTokenTypes.IsArray) {
+ 				int i = 0;
+ 
+@@ -639,7 +688,11 @@ namespace BeefLsp {
+ 				case "struct":    kind = 23;
+ 				case "typealias": kind = 26; // TODO: Currently set to TypeParameter
+ 				default:
+-					Log.Warning("Unknown navigation data: {}", lineStr);
++					// The IDE's own navigation parser silently ignores entries whose type token
++					// it does not recognise (including empty ones). Match that: logging a warning
++					// here floods the output channel with one line per such symbol. Use --logDebug
++					// to see these.
++					Log.Debug("Skipping unrecognized navigation entry: {}", lineStr);
+ 					continue;
+ 				}
+ 
+diff --git a/BeefLsp/src/Connections/TcpConnection.bf b/BeefLsp/src/Connections/TcpConnection.bf
+index 637006c..35e3a07 100644
+--- a/BeefLsp/src/Connections/TcpConnection.bf
++++ b/BeefLsp/src/Connections/TcpConnection.bf
+@@ -38,9 +38,12 @@ namespace BeefLsp {
+ 			client = new .();
+ 			client.Blocking = false;
+ 
+-			// Connect
+-			if (listener.Listen(5556) == .Err) return .Err;
+-			if (client.AcceptFrom(listener) == .Err) return .Err;
++			// Connect.
++			// NOTE: bind IPv4 localhost explicitly. Beef's IPv6 listen path fails on macOS
++			// (errno 47 / EAFNOSUPPORT), and the VS Code client connects over loopback anyway.
++			// Also use the configured port rather than a hardcoded one.
++			if (listener.ListenLocal((int32) port) case .Err) return .Err;
++			if (client.AcceptFrom(listener) case .Err) return .Err;
+ 
+ 			// Start thread
+ 			thread = new .(new => Run);
+@@ -74,7 +77,7 @@ namespace BeefLsp {
+ 		}
+ 
+ 		public Result<void> Send(void* data, int size) {
+-			if (client.Send(data, size) == .Err) return .Err;
++			if (client.Send(data, size) case .Err) return .Err;
+ 			return .Ok;
+ 		}
+ 
+diff --git a/BeefLsp/src/LspApp.bf b/BeefLsp/src/LspApp.bf
+index 1bfa4ae..71def79 100644
+--- a/BeefLsp/src/LspApp.bf
++++ b/BeefLsp/src/LspApp.bf
+@@ -135,15 +135,15 @@ namespace BeefLsp {
+ 			Log.Info(format, params args);
+ 		}
+ 
+-		public override void OutputErrorLine(String format, params Object[] args) {
++		public override void OutputErrorLine(StringView format, params Object[] args) {
+ 			Log.Error(format, params args);
+ 		}
+ 
+-		public override void OutputWarnLine(String format, params Object[] args) {
++		public override void OutputWarnLine(StringView format, params Object[] args) {
+ 			Log.Warning(format, params args);
+ 		}
+ 
+-		public override void OutputLineSmart(String format, params Object[] args) {
++		public override void OutputLineSmart(StringView format, params Object[] args) {
+ 			if (format.StartsWith("ERROR:")) Log.Error(format, params args);
+ 			else Log.Info(format, params args);
+ 		}
+diff --git a/BeefLsp/src/LspFileWatcher.bf b/BeefLsp/src/LspFileWatcher.bf
+index 58e9b78..c7a1fb7 100644
+--- a/BeefLsp/src/LspFileWatcher.bf
++++ b/BeefLsp/src/LspFileWatcher.bf
+@@ -53,12 +53,12 @@ class LspFileWatcher {
+ 
+ 			for (let childItem in folder.mChildItems) DeleteItem(childItem);
+ 
+-			folder.mParentFolder.RemoveChild(folder);
++			folder.mParentFolder.RemoveChild(folder, false);
+ 			folder.ReleaseLastRef();
+ 		}
+ 		// Delete item
+ 		else {
+-			item.mParentFolder.RemoveChild(item);
++			item.mParentFolder.RemoveChild(item, false);
+ 
+ 			if (item is ProjectSource) {
+ 				delete LspApp.APP.mBfBuildSystem.FileRemoved((.) item);
